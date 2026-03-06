@@ -202,6 +202,7 @@ const els = {
 function applyTranslations(lang) {
   const dict = i18n[lang];
   document.documentElement.lang = lang === 'de' ? 'de' : lang === 'ru' ? 'ru' : 'en';
+
   document.querySelectorAll('[data-i18n]').forEach(node => {
     const key = node.dataset.i18n;
     if (dict[key]) node.textContent = dict[key];
@@ -237,7 +238,6 @@ function toggleTheme() {
   setTheme(state.theme === 'dark' ? 'light' : 'dark');
 }
 
-
 function imageFallbackCandidates(src) {
   const clean = String(src || '').trim();
   if (!clean) return [];
@@ -245,17 +245,30 @@ function imageFallbackCandidates(src) {
   return [...new Set([clean, `./${clean}`, file, `images/portfolio/${file}`])];
 }
 
+function resetImageFallback(img) {
+  if (!img) return;
+  delete img.dataset.fallbackBound;
+  delete img.dataset.fallbackIndex;
+}
+
 function attachImageFallback(img) {
   if (!img || img.dataset.fallbackBound === 'true') return;
+
   img.dataset.fallbackBound = 'true';
+  img.dataset.fallbackIndex = '0';
+
   const candidates = imageFallbackCandidates(img.currentSrc || img.getAttribute('src'));
-  let idx = 0;
+  if (!candidates.length) return;
+
   img.addEventListener('error', () => {
-    idx += 1;
+    let idx = Number(img.dataset.fallbackIndex || '0') + 1;
+    img.dataset.fallbackIndex = String(idx);
+
     if (idx < candidates.length) {
       img.src = candidates[idx];
       return;
     }
+
     img.closest('figure')?.classList.add('image-missing');
   });
 }
@@ -277,7 +290,7 @@ function createPortfolioCard(item, index) {
     : `
       <div class="thumbs compare">
         <figure><img src="${item.beforeImage}" alt="${i18n[state.lang].beforeLabel}: ${item.title}"></figure>
-<figure><img src="${item.afterImage}" alt="${i18n[state.lang].afterLabel}: ${item.title}"></figure>
+        <figure><img src="${item.afterImage}" alt="${i18n[state.lang].afterLabel}: ${item.title}"></figure>
       </div>
     `;
 
@@ -288,6 +301,7 @@ function createPortfolioCard(item, index) {
       <p>${item.description[state.lang]}</p>
     </div>
   `;
+
   article.addEventListener('click', () => openModal(item));
   article.addEventListener('keydown', e => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -295,12 +309,15 @@ function createPortfolioCard(item, index) {
       openModal(item);
     }
   });
+
   return article;
 }
 
 function renderPortfolio() {
   if (!els.portfolioGrid) return;
+
   els.portfolioGrid.innerHTML = '';
+
   const visible = state.filter === 'Alle'
     ? state.portfolio
     : state.portfolio.filter(item => item.category === state.filter);
@@ -314,7 +331,12 @@ function renderPortfolio() {
   }
 
   visible.forEach((item, index) => {
-    els.portfolioGrid.appendChild(createPortfolioCard(item, index));
+    const card = createPortfolioCard(item, index);
+    els.portfolioGrid.appendChild(card);
+    card.querySelectorAll('img').forEach(img => {
+      resetImageFallback(img);
+      attachImageFallback(img);
+    });
   });
 }
 
@@ -328,22 +350,41 @@ function openModal(item) {
   const captions = els.modal.querySelectorAll('.modal-images figcaption');
 
   if (item.singleImage) {
+    if (figures[0]) figures[0].classList.remove('image-missing');
+    if (figures[1]) figures[1].classList.remove('image-missing');
+
+    resetImageFallback(els.modalBefore);
+    resetImageFallback(els.modalAfter);
+
     els.modalBefore.src = item.singleImage;
     els.modalBefore.alt = `${i18n[state.lang].galleryLabel}: ${item.title}`;
     els.modalAfter.removeAttribute('src');
     els.modalAfter.alt = '';
+
     if (captions[0]) captions[0].textContent = i18n[state.lang].detailLabel;
     if (figures[0]) figures[0].classList.add('single-span');
     if (figures[1]) figures[1].hidden = true;
+
+    attachImageFallback(els.modalBefore);
   } else {
+    if (figures[0]) figures[0].classList.remove('image-missing');
+    if (figures[1]) figures[1].classList.remove('image-missing');
+
+    resetImageFallback(els.modalBefore);
+    resetImageFallback(els.modalAfter);
+
     els.modalBefore.src = item.beforeImage;
     els.modalAfter.src = item.afterImage;
     els.modalBefore.alt = `${i18n[state.lang].modalAltBefore}: ${item.title}`;
     els.modalAfter.alt = `${i18n[state.lang].modalAltAfter}: ${item.title}`;
+
     if (captions[0]) captions[0].textContent = i18n[state.lang].beforeLabel;
     if (captions[1]) captions[1].textContent = i18n[state.lang].afterLabel;
     if (figures[0]) figures[0].classList.remove('single-span');
     if (figures[1]) figures[1].hidden = false;
+
+    attachImageFallback(els.modalBefore);
+    attachImageFallback(els.modalAfter);
   }
 
   els.modal.setAttribute('aria-hidden', 'false');
@@ -468,30 +509,57 @@ function initCursorGlow() {
     ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
     els.cursorGlow.style.left = `${x}px`;
     els.cursorGlow.style.top = `${y}px`;
+
     for (let i = particles.length - 1; i >= 0; i -= 1) {
       const p = particles[i];
-      p.x += p.vx; p.y += p.vy; p.vy += 0.012; p.life -= p.decay;
-      if (p.life <= 0) { particles.splice(i, 1); continue; }
-      ctx.globalAlpha = Math.max(p.life, 0); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.012;
+      p.life -= p.decay;
+
+      if (p.life <= 0) {
+        particles.splice(i, 1);
+        continue;
+      }
+
+      ctx.globalAlpha = Math.max(p.life, 0);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
     }
-    ctx.globalAlpha = 1; rafId = requestAnimationFrame(frame);
+
+    ctx.globalAlpha = 1;
+    rafId = requestAnimationFrame(frame);
   };
 
   const update = event => {
-    x = event.clientX; y = event.clientY; document.body.classList.add('pointer-active');
-    if (performance.now() - lastSpawn > 28) { spawn(x, y, 2); lastSpawn = performance.now(); }
+    x = event.clientX;
+    y = event.clientY;
+    document.body.classList.add('pointer-active');
+
+    if (performance.now() - lastSpawn > 28) {
+      spawn(x, y, 2);
+      lastSpawn = performance.now();
+    }
+
     if (!rafId) rafId = requestAnimationFrame(frame);
   };
 
-  resize(); window.addEventListener('resize', resize); window.addEventListener('pointermove', update, { passive: true });
-  window.addEventListener('pointerdown', event => { update(event); spawn(event.clientX, event.clientY, 8); }, { passive: true });
+  resize();
+  window.addEventListener('resize', resize);
+  window.addEventListener('pointermove', update, { passive: true });
+  window.addEventListener('pointerdown', event => {
+    update(event);
+    spawn(event.clientX, event.clientY, 8);
+  }, { passive: true });
   document.addEventListener('mouseleave', () => document.body.classList.remove('pointer-active'));
 }
 
 function init() {
   applyTranslations(state.lang);
   setTheme(state.theme);
-  els.year.textContent = new Date().getFullYear();
+  if (els.year) els.year.textContent = new Date().getFullYear();
   initLanguageButtons();
   initThemeToggle();
   initFilters();
