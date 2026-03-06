@@ -271,13 +271,13 @@ function createPortfolioCard(item, index) {
   const thumbsMarkup = isSingle
     ? `
       <div class="thumbs single">
-        <figure><img src="${item.singleImage}" alt="${i18n[state.lang].galleryLabel}: ${item.title}" loading="lazy" decoding="async"></figure>
+        <figure><img src="${item.singleImage}" alt="${i18n[state.lang].galleryLabel}: ${item.title}"></figure>
       </div>
     `
     : `
       <div class="thumbs compare">
-        <figure><img src="${item.beforeImage}" alt="${i18n[state.lang].beforeLabel}: ${item.title}" loading="lazy" decoding="async"></figure>
-        <figure><img src="${item.afterImage}" alt="${i18n[state.lang].afterLabel}: ${item.title}" loading="lazy" decoding="async"></figure>
+        <figure><img src="${item.beforeImage}" alt="${i18n[state.lang].beforeLabel}: ${item.title}"></figure>
+<figure><img src="${item.afterImage}" alt="${i18n[state.lang].afterLabel}: ${item.title}"></figure>
       </div>
     `;
 
